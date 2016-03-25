@@ -14,18 +14,26 @@ class xliffConverter {
     //if loaded zip,xmlreader,xmlwriter must be false.
     public $modulCheck = true;
     public $classCheck = true;
+    private $extractpath = "";
 
     public function __construct() {
-        ;
+        $this->checkPhpModulClass();
+        $this->extractpath = tempnam(sys_get_temp_dir(), "xliffconverter");
+    }
+
+    public function extractpath($dirname) {
+        $this->extractpath = $dirname;
     }
 
     private function setError($errStr, $errCode) {
         $this->error = $errStr;
         $this->error_code = $errCode;
     }
+
     /*
      * Check file exists or not exists
      */
+
     private function checkFile($filename, $setError = true) {
         if (!file_exists($filename)) {
             if ($setError) {
@@ -36,11 +44,11 @@ class xliffConverter {
         }
         return true;
     }
-    
+
     /*
-     *check necessary  php modules and classes 
+     * check necessary  php modules and classes 
      */
-    
+
     private function checkPhpModulClass() {
         if ($this->modulCheck) {
             if (!extension_loaded('zip')) {
@@ -74,8 +82,22 @@ class xliffConverter {
         return true;
     }
 
-    public function docxToXliff($source, $target, $docxfile) {
+    /*
+     * if has write permisson on directory
+     */
 
+    private function checkfPerm($dirname) {
+        if (!file_exists($dirname))
+            $dirname = dirname($dirname);
+        
+        if (is_writable($dirname))
+            return true;
+        else
+            $this->setError(" $dirname not writeable ", "131");
+        return false;
+    }
+
+    public function docxToXliff($source, $target, $docxfile) {
 
         if (!$this->checkFile($docxfile)) {
             return false;
@@ -88,23 +110,22 @@ class xliffConverter {
 
         $xliffData .=base64_encode(file_get_contents($docxfile)) . '</internal-file></reference></header><body/></file>';
 
-        $xliffData .='<file datatype="x-undefined" original="word/styles.xml" source-language="' . $source . '" target-language="' . $target . '">
-<body>
-</body>
-</file>
-<file datatype="x-undefined" original="word/document.xml" source-language="' . $source . '" target-language="' . $target . '">
-<body>';
+        $xliffData .='<file datatype="x-undefined" original="word/styles.xml" source-language="' . $source . '" target-language="' . $target . '">'
+                . '<body></body></file><file datatype="x-undefined" original="word/document.xml" source-language="' . $source . '" target-language="' . $target . '"><body>';
 
         $zip = new ZipArchive;
 
-        $extractpath = dirname($docxfile) . "/temp";
+        if ($this->checkfPerm($this->extractpath))
+            return false;
+
         if (!file_exists($extractpath))
             mkdir($extractpath, 0755, true);
+
         if ($zip->open($docxfile) === TRUE) {
             $zip->extractTo($extractpath);
             $zip->close();
         } else {
-            LOG::doLog(__METHOD__ . " ZipArchive Error");
+            $this->setError(__METHOD__ . " ZipArchive Error", "121");
             return false;
         }
 
@@ -118,21 +139,15 @@ class xliffConverter {
             switch ($reader->nodeType) {
                 case (XMLREADER::ELEMENT):
                     if ($reader->localName == "t") {
-                        $xliffData .='<trans-unit id="' . $idPart . '-tu' . ($counter++) . '" xml:space="preserve">
-<source xml:lang="' . $source . '">' . $reader->readString() . '</source>
-<seg-source><mrk mid="0" mtype="seg">' . $reader->readString() . '</mrk></seg-source>
-<target xml:lang="' . $target . '"><mrk mid="0" mtype="seg"></mrk></target>
-</trans-unit>';
+                        $xliffData .='<trans-unit id="' . $idPart . '-tu' . ($counter++) . '" xml:space="preserve">'
+                                . '<source xml:lang="' . $source . '">' . $reader->readString() . '</source>'
+                                . '<seg-source><mrk mid="0" mtype="seg">' . $reader->readString() . '</mrk></seg-source>'
+                                . '<target xml:lang="' . $target . '"><mrk mid="0" mtype="seg"></mrk></target>'
+                                . '</trans-unit>';
                     }
             }
         }
-        $xliffData .='</body>
-</file>
-<file datatype="x-undefined" original="word/settings.xml" source-language="' . $source . '" target-language="' . $target . '">
-<body>
-</body>
-</file>
-</xliff>';
+        $xliffData .='</body></file><file datatype="x-undefined" original="word/settings.xml" source-language="' . $source . '" target-language="' . $target . '"><body></body></file></xliff>';
         file_put_contents($docxfile . ".xlf", $xliffData);
     }
 
@@ -218,10 +233,9 @@ class xliffConverter {
 }
 
 //Testing
-print_r(get_loaded_extensions());
+if (is_writable($filename))
 
-if (!extension_loaded('zip')) {
-    print "Yüklü değil";
-    exit;
-}
+if (mkdir("/root/deneme")!==false)
+    print "oluştu";
+
 ?>
