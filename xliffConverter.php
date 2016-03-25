@@ -218,10 +218,5 @@ class xliffConverter {
 }
 
 //Testing
-print_r(get_loaded_extensions());
 
-if (!extension_loaded('zip')) {
-    print "Yüklü değil";
-    exit;
-}
 ?>
