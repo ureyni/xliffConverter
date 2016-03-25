@@ -98,6 +98,9 @@ class xliffConverter {
     }
 
     public function docxToXliff($source, $target, $docxfile) {
+        
+        if (!empty($this->error))
+            return false;
 
         if (!$this->checkFile($docxfile)) {
             return false;
@@ -148,27 +151,41 @@ class xliffConverter {
             }
         }
         $xliffData .='</body></file><file datatype="x-undefined" original="word/settings.xml" source-language="' . $source . '" target-language="' . $target . '"><body></body></file></xliff>';
-        file_put_contents($docxfile . ".xlf", $xliffData);
+        $size = file_put_contents($docxfile . ".xlf", $xliffData);
+        if ($size == 0){
+            $this->setError("not write to xliff file.", "151");
+            return false;
+        }
+        return true;
     }
 
     /*
      * hucak 
      * xliff to docx converter..24 03 2016
      * hasan.ucak@gmail.com
+     * $data sample array...
+     * $data[0]['segment']='.......';
+     * $data[0]['translation']='.......';
+     * .......
+     * .....
+     * 
      */
 
     public function xliffToDocx($data, $orginaldocxfile, $outputdocx) {
 
+        if (!empty($this->error))
+            return false;
 
-        if (!file_exists($orginaldocxfile)) {
+        if (!$this->checkFile($orginaldocxfile)) {
             return false;
         }
+        
+        if ($this->checkfPerm(dirname($outputdocx)))
+            return false;
+        
         $zip = new ZipArchive;
 
-        $extractpath = dirname($orginaldocxfile) . "/temp";
-        $extractpath = tempnam("", "docx");
-
-        if (file_exists($extractpath))
+       if (file_exists($extractpath))
             system("rm -rf $extractpath");
         mkdir($extractpath, 0755, true);
         if ($zip->open($orginaldocxfile) === TRUE) {
@@ -226,16 +243,16 @@ class xliffConverter {
                 }
             }
             $zip->close();
+        }{
+            $this->setError(__METHOD__ . " ZipArchive Error", "121");
+            return false;
         }
+            
         system("rm -rf $extractpath");
     }
 
 }
 
 //Testing
-if (is_writable($filename))
-
-if (mkdir("/root/deneme")!==false)
-    print "oluştu";
 
 ?>
