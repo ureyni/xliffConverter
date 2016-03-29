@@ -2,7 +2,7 @@
 
 /*
  * hucak 
- * docx to xliff converter..march 2016
+ * docx,xlsx,pptx to xliff converter..march 2016
  * hasan.ucak@gmail.com
  */
 
@@ -89,7 +89,7 @@ class xliffConverter {
     private function checkfPerm($dirname) {
         if (!file_exists($dirname))
             $dirname = dirname($dirname);
-        
+
         if (is_writable($dirname))
             return true;
         else
@@ -97,21 +97,46 @@ class xliffConverter {
         return false;
     }
 
-    public function docxToXliff($source, $target, $docxfile) {
-        
+    public function officexToXliff($source, $target, $xfile) {
+
+        function xmlToxliff($source, $target, $xmlfile, &$xliffData, $idPart, &$counter) {
+            $config = array(
+                'indent' => true,
+                'input-xml' => true,
+                'output-xml' => true,
+                'wrap' => false);
+
+            $tidy = new tidy;
+            $tidy->parseFile($xmlfile, $config, 'utf8');
+            $reader = new XMLReader();
+            $reader->XML($tidy->value);
+
+            while ($reader->read()) {
+                if ($reader->hasValue && !empty(trim($reader->value))) {
+                    $xliffData .='<trans-unit id="' . $idPart . '-tu' . ($counter++) . '" xml:space="preserve">' . PHP_EOL
+                            . '<source xml:lang="' . $source . '">' . trim($reader->value) . '</source>' . PHP_EOL
+                            . '<seg-source><mrk mid="0" mtype="seg">' . trim($reader->value) . '</mrk></seg-source>' . PHP_EOL
+                            . '<target xml:lang="' . $target . '"><mrk mid="0" mtype="seg"></mrk></target>' . PHP_EOL
+                            . '</trans-unit>' . PHP_EOL;
+                }
+            }
+            $reader->close();
+        }
+
+        libxml_use_internal_errors(true);
+
         if (!empty($this->error))
             return false;
 
-        if (!$this->checkFile($docxfile)) {
+        if (!$this->checkFile($xfile)) {
             return false;
         }
 
-
         $xliffData = '<?xml version="1.0" encoding="UTF-8"?>'
                 . '<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:its="http://www.w3.org/2005/11/its" xmlns:itsxlf="http://www.w3.org/ns/its-xliff/" xmlns:okp="okapi-framework:xliff-extensions" its:version="2.0" version="1.2">'
-                . '<file datatype="x-docx" original="' . basename($docxfile) . '" source-language="' . $source . '" target-language="' . $target . '" tool-id="matecat-converter 1.1.2"><header><reference><internal-file form="base64">';
+                . '<file datatype="x-docx" original="' . basename($xfile) . '" source-language="' . $source . '" target-language="' . $target . '" tool-id="matecat-converter 1.1.2"><header><reference><internal-file form="base64">';
 
-        $xliffData .=base64_encode(file_get_contents($docxfile)) . '</internal-file></reference></header><body/></file>';
+        $xliffData .=base64_encode(file_get_contents($xfile)) . '</internal-file></reference></header><body/></file>';
 
         $xliffData .='<file datatype="x-undefined" original="word/styles.xml" source-language="' . $source . '" target-language="' . $target . '">'
                 . '<body></body></file><file datatype="x-undefined" original="word/document.xml" source-language="' . $source . '" target-language="' . $target . '"><body>';
@@ -121,38 +146,35 @@ class xliffConverter {
         if ($this->checkfPerm($this->extractpath))
             return false;
 
-        if (!file_exists($extractpath))
-            mkdir($extractpath, 0755, true);
+        if (!file_exists($this->extractpath))
+            mkdir($this->extractpath, 0755, true);
 
-        if ($zip->open($docxfile) === TRUE) {
-            $zip->extractTo($extractpath);
+        if ($zip->open($xfile) === TRUE) {
+            $zip->extractTo($this->extractpath);
             $zip->close();
         } else {
             $this->setError(__METHOD__ . " ZipArchive Error", "121");
             return false;
         }
 
-        $reader = new XMLReader();
-
-        $reader->open($extractpath . "/word/document.xml");
+        $xml = array();
+        if (file_exists($this->extractpath . "/xl/sharedStrings.xml"))
+            $xmlfile[] = $this->extractpath . "/xl/sharedStrings.xml";
+        elseif (file_exists($this->extractpath . "/word/document.xml"))
+            $xmlfile[] = $this->extractpath . "/word/document.xml";
+        elseif (file_exists($this->extractpath . "/ppt/slides/slide1.xml")) {
+            $xmlfile = glob($this->extractpath . "/ppt/slides/slide*.xml");
+        }
 
         $idPart = hash('md5', time() . rand(1, 1000));
         $counter = 0;
-        while ($reader->read()) {
-            switch ($reader->nodeType) {
-                case (XMLREADER::ELEMENT):
-                    if ($reader->localName == "t") {
-                        $xliffData .='<trans-unit id="' . $idPart . '-tu' . ($counter++) . '" xml:space="preserve">'
-                                . '<source xml:lang="' . $source . '">' . $reader->readString() . '</source>'
-                                . '<seg-source><mrk mid="0" mtype="seg">' . $reader->readString() . '</mrk></seg-source>'
-                                . '<target xml:lang="' . $target . '"><mrk mid="0" mtype="seg"></mrk></target>'
-                                . '</trans-unit>';
-                    }
-            }
+        foreach ($xmlfile as $filename) {
+            xmlToxliff($source, $target, $filename, $xliffData, $idPart, $counter);
         }
+
         $xliffData .='</body></file><file datatype="x-undefined" original="word/settings.xml" source-language="' . $source . '" target-language="' . $target . '"><body></body></file></xliff>';
-        $size = file_put_contents($docxfile . ".xlf", $xliffData);
-        if ($size == 0){
+        $size = file_put_contents($xfile . ".xlf", $xliffData);
+        if ($size == 0) {
             $this->setError("not write to xliff file.", "151");
             return false;
         }
@@ -161,7 +183,7 @@ class xliffConverter {
 
     /*
      * hucak 
-     * xliff to docx converter..24 03 2016
+     * xliff to docx,xlsx,pptx converter..24 03 2016
      * hasan.ucak@gmail.com
      * $data sample array...
      * $data[0]['segment']='.......';
@@ -171,88 +193,114 @@ class xliffConverter {
      * 
      */
 
-    public function xliffToDocx($data, $orginaldocxfile, $outputdocx) {
+    public function xliffToDocx($data, $orginalxfile, $outputx) {
+        libxml_use_internal_errors(true);
+
+        function xlifftoXml($data, $xmlfile, $xmlTmpfile) {
+            $config = array(
+                'indent' => true,
+                'input-xml' => true,
+                'output-xml' => true,
+                'wrap' => false);
+
+            $tidy = new tidy;
+            $tidy->parseFile($xmlfile, $config, 'utf8');
+
+            $reader = new XMLReader();
+            $writer = new XMLWriter();
+            $writer->openURI($xmlTmpfile);
+            $writer->startDocument('1.0', 'UTF-8', "yes");
+
+            $reader->XML($tidy->value);
+            while ($reader->read()) {
+                $isempty = false;
+                switch ($reader->nodeType) {
+                    case (XMLREADER::END_ELEMENT):
+                        $writer->endElement();
+                        break;
+                    case (XMLREADER::ELEMENT):
+                        $writer->startElement($reader->name);
+                        if ($reader->isEmptyElement)
+                            $isempty = true;
+                        break;
+                    case (XMLREADER::TEXT):
+                        $key = array_search($reader->value, array_column($data, "segment"));
+                        if ($key !== false) {
+                            $writer->text($data[$key]['translation']);
+                        } else
+                            $writer->text($reader->value);
+                        break;
+                }
+                $count = $reader->attributeCount;
+                for ($index = 0; $index < $count; $index++) {
+                    $reader->moveToAttributeNo($index);
+                    $writer->writeAttribute($reader->name, $reader->value);
+                }
+                if ($isempty) {
+                    $writer->endElement();
+                }
+            }
+            $writer->endDocument();
+            $reader->close();
+        }
 
         if (!empty($this->error))
             return false;
 
-        if (!$this->checkFile($orginaldocxfile)) {
+        if (!$this->checkFile($orginalxfile)) {
             return false;
         }
-        
-        if ($this->checkfPerm(dirname($outputdocx)))
+
+        if ($this->checkfPerm(dirname($outputx)))
             return false;
-        
+
         $zip = new ZipArchive;
 
-       if (file_exists($extractpath))
-            system("rm -rf $extractpath");
-        mkdir($extractpath, 0755, true);
-        if ($zip->open($orginaldocxfile) === TRUE) {
-            $zip->extractTo($extractpath);
+        if (file_exists($this->extractpath))
+            system("rm -rf $this->extractpath");
+        mkdir($this->extractpath, 0755, true);
+        if ($zip->open($orginalxfile) === TRUE) {
+            $zip->extractTo($this->extractpath);
             $zip->close();
         } else {
             return false;
         }
 
-        $reader = new XMLReader();
-        $writer = new XMLWriter();
-        $writer->openURI($extractpath . "/word/tmp_document.xml");
-        $writer->startDocument('1.0', 'UTF-8', "yes");
-
-        $reader->XML(file_get_contents($extractpath . "/word/document.xml"));
-        while ($reader->read()) {
-            $isempty = false;
-            switch ($reader->nodeType) {
-                case (XMLREADER::END_ELEMENT):
-                    $writer->endElement();
-                    break;
-                case (XMLREADER::ELEMENT):
-                    $writer->startElement($reader->name);
-                    if ($reader->isEmptyElement)
-                        $isempty = true;
-                    break;
-                case (XMLREADER::TEXT):
-                    $key = array_search($reader->value, array_column($data, "segment"));
-                    if ($key !== false) {
-                        $writer->text($data[$key]['translation']);
-                    } else
-                        $writer->text($reader->value);
-                    break;
-            }
-            $count = $reader->attributeCount;
-            for ($index = 0; $index < $count; $index++) {
-                $reader->moveToAttributeNo($index);
-                $writer->writeAttribute($reader->name, $reader->value);
-            }
-            if ($isempty) {
-                $writer->endElement();
-            }
+        $xmlfile = array();
+        if (file_exists($this->extractpath . "/xl/sharedStrings.xml")) {
+            $xmlfile[] = $this->extractpath . "/xl/sharedStrings.xml";
+        } elseif (file_exists($this->extractpath . "/word/document.xml")) {
+            $xmlfile[] = $this->extractpath . "/word/document.xml";
+        } elseif (file_exists($this->extractpath . "/ppt/slides/slide1.xml")) {
+            $xmlfile = glob($this->extractpath . "/ppt/slides/slide*.xml");
         }
-        $writer->endDocument();
-        $reader->close();
 
-        unlink($extractpath . "/word/document.xml");
-        rename($extractpath . "/word/tmp_document.xml", $extractpath . "/word/document.xml");
+
+        foreach ($xmlfile as $xfile) {
+            $xmlTmpfile = $xfile . ".tmp" . rand(0, 1000);
+            xlifftoXml($data, $xfile, $xmlTmpfile);
+            unlink($xfile);
+            rename($xmlTmpfile, $xfile);
+        }
+
         $zip = new ZipArchive;
-        if ($zip->open($outputdocx, ZIPARCHIVE::CREATE | ZIPARCHIVE::OVERWRITE) === true) {
-            $ite = new RecursiveDirectoryIterator($extractpath . "/");
+        if ($zip->open($outputx, ZIPARCHIVE::CREATE | ZIPARCHIVE::OVERWRITE) === true) {
+            $ite = new RecursiveDirectoryIterator($this->extractpath . "/");
             foreach (new RecursiveIteratorIterator($ite, RecursiveIteratorIterator::LEAVES_ONLY) as $filename => $cur) {
                 if (!$cur->isDir()) {
-                    $zip->addFile($filename, str_replace($extractpath . "/", "", $filename));
+                    $zip->addFile($filename, str_replace($this->extractpath . "/", "", $filename));
                 }
             }
             $zip->close();
-        }{
+        } {
             $this->setError(__METHOD__ . " ZipArchive Error", "121");
             return false;
         }
-            
+
         system("rm -rf $extractpath");
     }
 
 }
 
 //Testing
-
 ?>
