@@ -10,8 +10,8 @@ class xliffConverter {
 
     public $error = '';
     public $error_code = 0;
-    //check zip,xmlreader,xmlwriter modules
-    //if loaded zip,xmlreader,xmlwriter must be false.
+//check zip,xmlreader,xmlwriter modules
+//if loaded zip,xmlreader,xmlwriter must be false.
     public $modulCheck = true;
     public $classCheck = true;
     private $extractpath = "";
@@ -76,6 +76,10 @@ class xliffConverter {
             }
             if (!class_exists("xmlwriter")) {
                 $this->setError(" xmlwriter Class not found", "107");
+                return false;
+            }
+            if (!class_exists("tidy")) {
+                $this->setError(" Tidy Class not found", "108");
                 return false;
             }
         }
@@ -298,6 +302,54 @@ class xliffConverter {
         }
 
         system("rm -rf $extractpath");
+    }
+
+    /*
+     * hucak 
+     * doc,xls,ppt to docx,xlsx,pptx converter..24 03 2016
+     * hasan.ucak@gmail.com
+     * require libreoffice 5.x
+     * 
+     */
+
+    public function officeTOofficex($officeFile) {
+        //libreoffice check..
+        exec("which libreoffice", $output, $return_var);
+        if ($return_var != 0) {
+            $this->setError("libreoffice Not install ", "200");
+            return false;
+        }
+        exec("libreoffice --version", $output, $return_var);
+        preg_match_all("/^LibreOffice (\d{1})\.(.*)/i", $output[0], $matches, PREG_SET_ORDER);
+        if ($matches[0][1] < 5) {
+            $this->setError("libreoffice version 5 or greator ", "201");
+            return false;
+        }
+
+
+        if (substr($mfile, -4) == ".doc") {
+            exec('libreoffice --convert-to docx:"MS Word 2007 XML" ' . $mofficeFile, $output, $return_var);
+            if ($return_var != 0) {
+                $this->setError("$officeFile file Convert Error:" . var_export($output, true), $return_var);
+                return false;
+            }
+        }
+
+        if (substr($mfile, -4) == ".xls") {
+            exec('libreoffice --convert-to xlsx:"MS Excel 2003 XML" ' . $mofficeFile, $output, $return_var);
+            if ($return_var != 0) {
+                $this->setError("$officeFile file Convert Error:" . var_export($output, true), $return_var);
+                return false;
+            }
+        }
+
+        if (substr($mfile, -4) == ".ppt") {
+            exec(' libreoffice --convert-to pptx:"Impress MS PowerPoint 2007 XML" ' . $mofficeFile, $output, $return_var);
+            if ($return_var != 0) {
+                $this->setError("$officeFile file Convert Error:" . var_export($output, true), $return_var);
+                return false;
+            }
+        }
     }
 
 }
