@@ -136,9 +136,11 @@ class xliffConverter {
             return false;
         }
 
+        $extension = substr($xfile,-4);
+
         $xliffData = '<?xml version="1.0" encoding="UTF-8"?>'
                 . '<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:its="http://www.w3.org/2005/11/its" xmlns:itsxlf="http://www.w3.org/ns/its-xliff/" xmlns:okp="okapi-framework:xliff-extensions" its:version="2.0" version="1.2">'
-                . '<file datatype="x-docx" original="' . basename($xfile) . '" source-language="' . $source . '" target-language="' . $target . '" tool-id="matecat-converter 1.1.2"><header><reference><internal-file form="base64">';
+                . '<file datatype="x-'.$extension.'" original="' . basename($xfile) . '" source-language="' . $source . '" target-language="' . $target . '" tool-id="matecat-converter 1.1.2"><header><reference><internal-file form="base64">';
 
         $xliffData .=base64_encode(file_get_contents($xfile)) . '</internal-file></reference></header><body/></file>';
 
